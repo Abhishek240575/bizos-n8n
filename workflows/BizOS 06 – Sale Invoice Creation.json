@@ -1,0 +1,759 @@
+{
+  "name": "BizOS 06 – Sale Invoice Creation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "bizos-invoice-form",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "36fe7285-8534-4de8-924e-57b6bfd58aed",
+      "name": "GET Invoice Form",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -112,
+        -320
+      ],
+      "webhookId": "84e6b743-69d3-43f6-8af5-6f9c995519ef"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "4a2be22c-34dd-4fd9-bf5a-2348a6969cf0",
+      "name": "Respond Form",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bizos-invoice-submit",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "323afaa6-06c2-4c85-a5b9-fffa0c5280a9",
+      "name": "POST Invoice Submit",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        -128
+      ],
+      "webhookId": "baa3d8b6-d4e3-4791-8032-f7dee2816016"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n1",
+              "name": "customer_id",
+              "value": "={{ $json.body?.customer_id ?? $json.customer_id }}",
+              "type": "number"
+            },
+            {
+              "id": "n2",
+              "name": "invoice_no",
+              "value": "={{ ($json.body?.invoice_no ?? $json.invoice_no ?? \"\").trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "n3",
+              "name": "invoice_date",
+              "value": "={{ $json.body?.invoice_date ?? $json.invoice_date }}",
+              "type": "string"
+            },
+            {
+              "id": "n4",
+              "name": "due_date",
+              "value": "={{ $json.body?.due_date ?? $json.invoice_date ?? $json.body?.invoice_date }}",
+              "type": "string"
+            },
+            {
+              "id": "n5",
+              "name": "party_gstin",
+              "value": "={{ $json.body?.party_gstin ?? $json.party_gstin ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "n6",
+              "name": "taxable_amount",
+              "value": "={{ parseFloat($json.body?.taxable_amount ?? $json.taxable_amount ?? 0) }}",
+              "type": "number"
+            },
+            {
+              "id": "n7",
+              "name": "cgst",
+              "value": "={{ parseFloat($json.body?.cgst ?? $json.cgst ?? 0) }}",
+              "type": "number"
+            },
+            {
+              "id": "n8",
+              "name": "sgst",
+              "value": "={{ parseFloat($json.body?.sgst ?? $json.sgst ?? 0) }}",
+              "type": "number"
+            },
+            {
+              "id": "n9",
+              "name": "total",
+              "value": "={{ parseFloat($json.body?.total ?? $json.total ?? 0) }}",
+              "type": "number"
+            },
+            {
+              "id": "n10",
+              "name": "items_json",
+              "value": "={{ $json.body?.items_json ?? $json.items_json ?? \"[]\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ab58f6b1-8ab7-476c-926c-8cbce4c71639",
+      "name": "Normalize Submit",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        176,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO invoices\n  (tenant_id, customer_id, invoice_no, invoice_type, invoice_date, due_date,\n   party_gstin, taxable_amount, cgst, sgst, total, status, extracted, created_at)\nVALUES\n  (1,\n   {{ $json.customer_id }},\n   '{{ $json.invoice_no }}',\n   'sale',\n   '{{ $json.invoice_date }}',\n   '{{ $json.due_date }}',\n   '{{ $json.party_gstin }}',\n   {{ $json.taxable_amount }},\n   {{ $json.cgst }},\n   {{ $json.sgst }},\n   {{ $json.total }},\n   'draft',\n   '{{ $json.items_json }}'::jsonb,\n   NOW()\n  )\nRETURNING id, invoice_no, invoice_date, due_date, total, taxable_amount, cgst, sgst",
+        "options": {}
+      },
+      "id": "b1afbb18-1cc4-4ec8-97a5-b1ed2d923eed",
+      "name": "Insert Draft Invoice",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2BelrVghqyBvkmNp",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT name FROM customers WHERE id = {{ $('Normalize Submit').item.json.customer_id }} AND tenant_id = 1 LIMIT 1",
+        "options": {}
+      },
+      "id": "4e516513-bef7-4d51-8092-845c2d585d21",
+      "name": "Fetch Customer Name",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        624,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2BelrVghqyBvkmNp",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Build Approval Page — inline HTML (runOnceForEachItem)\nconst approvalHtml = \"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n  <meta charset=\\\"UTF-8\\\">\\n  <meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\\\">\\n  <title>Approve Invoice \\u2013 BizOS</title>\\n  <style>\\n    * { box-sizing: border-box; margin: 0; padding: 0; }\\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }\\n    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); padding: 28px; width: 100%; max-width: 540px; }\\n    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }\\n    .logo-text { font-size: 20px; font-weight: 700; color: #1a1a2e; }\\n    .logo-sub { font-size: 13px; color: #666; }\\n    .draft-badge { display: inline-block; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 20px; font-size: 12px; font-weight: 600; padding: 3px 10px; margin-bottom: 16px; }\\n    h2 { font-size: 18px; color: #1a1a2e; margin-bottom: 4px; }\\n    .sub { color: #666; font-size: 13px; margin-bottom: 20px; }\\n    .detail-box { background: #f8f9ff; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }\\n    .detail-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee; font-size: 14px; }\\n    .detail-row:last-child { border-bottom: none; }\\n    .detail-label { color: #666; }\\n    .detail-value { font-weight: 600; color: #1a1a2e; }\\n    .items-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }\\n    .items-table th { text-align: left; padding: 7px 8px; background: #f8f9ff; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid #eee; }\\n    .items-table td { padding: 7px 8px; border-bottom: 1px solid #f0f0f0; color: #1a1a2e; }\\n    .items-table td:last-child { text-align: right; font-weight: 600; }\\n    .totals-box { background: #f8f9ff; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }\\n    .total-row { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; color: #555; }\\n    .total-row.grand { font-weight: 700; font-size: 16px; color: #1a1a2e; border-top: 1px solid #ddd; margin-top: 5px; padding-top: 7px; }\\n    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }\\n    .btn-approve { padding: 12px; background: #22c55e; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; }\\n    .btn-approve:hover { background: #16a34a; }\\n    .btn-reject { padding: 12px; background: #fff; color: #ef4444; border: 2px solid #ef4444; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; }\\n    .btn-reject:hover { background: #fff0f0; }\\n    .footer { margin-top: 16px; text-align: center; font-size: 12px; color: #aaa; }\\n  </style>\\n</head>\\n<body>\\n  <div class=\\\"card\\\">\\n    <div class=\\\"logo\\\">\\n      <span style=\\\"font-size:26px\\\">\\ud83d\\udcca</span>\\n      <div>\\n        <div class=\\\"logo-text\\\">BizOS</div>\\n        <div class=\\\"logo-sub\\\">Gupta Electricals</div>\\n      </div>\\n    </div>\\n    <span class=\\\"draft-badge\\\">\\u23f3 DRAFT \\u2014 Approval Pending</span>\\n    <h2>Invoice Review \\u0915\\u0930\\u0947\\u0902</h2>\\n    <p class=\\\"sub\\\">\\u0928\\u0940\\u091a\\u0947 details check \\u0915\\u0930\\u0947\\u0902 \\u0914\\u0930 Approve \\u092f\\u093e Reject \\u0915\\u0930\\u0947\\u0902\\u0964</p>\\n\\n    <div class=\\\"detail-box\\\">\\n      <div class=\\\"detail-row\\\"><span class=\\\"detail-label\\\">Invoice No.</span><span class=\\\"detail-value\\\">__INVOICE_NO__</span></div>\\n      <div class=\\\"detail-row\\\"><span class=\\\"detail-label\\\">Customer</span><span class=\\\"detail-value\\\">__CUSTOMER_NAME__</span></div>\\n      <div class=\\\"detail-row\\\"><span class=\\\"detail-label\\\">Invoice Date</span><span class=\\\"detail-value\\\">__INVOICE_DATE__</span></div>\\n      <div class=\\\"detail-row\\\"><span class=\\\"detail-label\\\">Due Date</span><span class=\\\"detail-value\\\">__DUE_DATE__</span></div>\\n    </div>\\n\\n    <table class=\\\"items-table\\\">\\n      <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>\\n      <tbody>__ITEMS_ROWS__</tbody>\\n    </table>\\n\\n    <div class=\\\"totals-box\\\">\\n      <div class=\\\"total-row\\\"><span>Taxable Amount</span><span>Rs __TAXABLE__</span></div>\\n      <div class=\\\"total-row\\\"><span>CGST</span><span>Rs __CGST__</span></div>\\n      <div class=\\\"total-row\\\"><span>SGST</span><span>Rs __SGST__</span></div>\\n      <div class=\\\"total-row grand\\\"><span>Total Invoice</span><span>Rs __TOTAL__</span></div>\\n    </div>\\n\\n    <div class=\\\"btn-row\\\">\\n      <form action=\\\"/webhook/bizos-invoice-approve\\\" method=\\\"POST\\\" style=\\\"margin:0\\\">\\n        <input type=\\\"hidden\\\" name=\\\"invoice_id\\\" value=\\\"__INVOICE_ID__\\\">\\n        <button type=\\\"submit\\\" class=\\\"btn-approve\\\">\\u2705 Approve \\u0915\\u0930\\u0947\\u0902</button>\\n      </form>\\n      <form action=\\\"/webhook/bizos-invoice-reject\\\" method=\\\"POST\\\" style=\\\"margin:0\\\">\\n        <input type=\\\"hidden\\\" name=\\\"invoice_id\\\" value=\\\"__INVOICE_ID__\\\">\\n        <button type=\\\"submit\\\" class=\\\"btn-reject\\\">\\u274c Reject \\u0915\\u0930\\u0947\\u0902</button>\\n      </form>\\n    </div>\\n\\n    <div class=\\\"footer\\\">BizOS \\u2022 Gupta Electricals \\u2022 Powered by n8n</div>\\n  </div>\\n</body>\\n</html>\\n\";\n\nconst invoiceId   = $(\"Insert Draft Invoice\").item.json.id;\nconst invoiceNo   = $(\"Insert Draft Invoice\").item.json.invoice_no;\nconst rawDate = $(\"Insert Draft Invoice\").item.json.invoice_date;\nconst rawDue  = $(\"Insert Draft Invoice\").item.json.due_date;\nconst invoiceDate = rawDate ? new Date(rawDate).toLocaleDateString('en-IN', {day:'2-digit',month:'2-digit',year:'numeric'}) : '';\nconst dueDate     = rawDue  ? new Date(rawDue).toLocaleDateString('en-IN', {day:'2-digit',month:'2-digit',year:'numeric'}) : '';\nconst taxable     = $(\"Insert Draft Invoice\").item.json.taxable_amount;\nconst cgst        = $(\"Insert Draft Invoice\").item.json.cgst;\nconst sgst        = $(\"Insert Draft Invoice\").item.json.sgst;\nconst total       = $(\"Insert Draft Invoice\").item.json.total;\nconst customerName = item.json.name;\n\nconst itemsJson = $(\"Normalize Submit\").item.json.items_json || \"[]\";\nlet lineItems = [];\ntry { lineItems = JSON.parse(itemsJson); } catch(e) { lineItems = []; }\n\nconst itemRows = lineItems.map(it => {\n  return \"<tr><td>\" + (it.desc||\"\") + \"</td><td style=\\\"text-align:right\\\">\" + (it.qty||0) + \"</td><td style=\\\"text-align:right\\\">Rs \" + Number(it.rate||0).toFixed(2) + \"</td><td style=\\\"text-align:right;font-weight:600\\\">Rs \" + Number(it.amount||0).toFixed(2) + \"</td></tr>\";\n}).join(\"\");\n\nconst html = approvalHtml\n  .replace(/__INVOICE_NO__/g, String(invoiceNo))\n  .replace(/__CUSTOMER_NAME__/g, String(customerName))\n  .replace(/__INVOICE_DATE__/g, String(invoiceDate))\n  .replace(/__DUE_DATE__/g, String(dueDate))\n  .replace(/__ITEMS_ROWS__/g, itemRows)\n  .replace(/__TAXABLE__/g, String(taxable))\n  .replace(/__CGST__/g, String(cgst))\n  .replace(/__SGST__/g, String(sgst))\n  .replace(/__TOTAL__/g, String(total))\n  .replace(/__INVOICE_ID__/g, String(invoiceId));\n\nreturn { json: { html } };"
+      },
+      "id": "05689bc0-6ca9-4221-b274-874e82b2dc0b",
+      "name": "Build Approval Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "687a07b9-b5dd-4a05-92dc-943f3cf22f21",
+      "name": "Respond Approval Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bizos-invoice-approve",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "52e5ba10-5ecd-4a7d-a9ef-13f560238941",
+      "name": "POST Invoice Approve",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        48
+      ],
+      "webhookId": "de9e132d-1f50-4ac7-89c0-5daca68880a0"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "invoice_id",
+              "value": "={{ parseInt($json.body?.invoice_id ?? $json.invoice_id ?? 0) }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cf53a3af-c1a3-4440-9be2-d50c7892157a",
+      "name": "Normalize Approve",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE invoices\nSET status = 'posted', updated_at = NOW()\nWHERE id = {{ $json.invoice_id }}\n  AND tenant_id = 1\n  AND status = 'draft'\nRETURNING id, invoice_no, total, customer_id",
+        "options": {}
+      },
+      "id": "5666a664-9982-4294-b4c9-00f983a74272",
+      "name": "Post Invoice",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        448,
+        176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2BelrVghqyBvkmNp",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_log (tenant_id, actor, action, entity, entity_id, details, created_at)\nVALUES (1, 'bizos-invoice-form', 'invoice_approved', 'invoice', {{ $json.id }},\n  '{\"invoice_no\": \"{{ $json.invoice_no }}\", \"total\": {{ $json.total }}}'::jsonb,\n  NOW())",
+        "options": {}
+      },
+      "id": "e3bcb834-d728-412b-9bfb-233ba4056da9",
+      "name": "Audit Approve",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        672,
+        176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2BelrVghqyBvkmNp",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Invoice Approved</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);padding:32px;width:100%;max-width:440px;text-align:center}.icon{font-size:48px;margin-bottom:16px}.title{font-size:22px;font-weight:700;color:#16a34a;margin-bottom:8px}.sub{color:#555;font-size:14px;margin-bottom:20px}.detail{background:#f0fdf4;border-radius:8px;padding:14px;margin-bottom:20px;font-size:14px;color:#15803d}.btn{display:inline-block;padding:10px 24px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px}.footer{margin-top:20px;font-size:12px;color:#aaa}</style></head><body><div class=\"card\"><div class=\"icon\">✅</div><div class=\"title\">Invoice Approved!</div><p class=\"sub\">Invoice successfully posted to books.</p><div class=\"detail\">Invoice No: <strong>{{ $(\"Post Invoice\").item.json.invoice_no }}</strong><br>Total: <strong>Rs {{ $(\"Post Invoice\").item.json.total }}</strong></div><a href=\"/webhook/bizos-invoice-form\" class=\"btn\">+ New Invoice बनाएं</a><div class=\"footer\">BizOS • Gupta Electricals</div></div></body></html>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "e0aacfba-a6fa-4c95-bc00-6d4df5ed0100",
+      "name": "Respond Approve Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bizos-invoice-reject",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "06f52bbe-65fe-405e-8551-6ab3400c502d",
+      "name": "POST Invoice Reject",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        672
+      ],
+      "webhookId": "2c9f78fe-791d-4d86-b858-7d2f3c8f4fdd"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "invoice_id",
+              "value": "={{ parseInt($json.body?.invoice_id ?? $json.invoice_id ?? 0) }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9bb019f4-eaf7-4b7e-9bd2-2141355a07d3",
+      "name": "Normalize Reject",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE invoices\nSET status = 'cancelled', updated_at = NOW()\nWHERE id = {{ $json.invoice_id }}\n  AND tenant_id = 1\n  AND status = 'draft'\nRETURNING id, invoice_no",
+        "options": {}
+      },
+      "id": "814e15b0-061d-4aa0-bfb5-87cc7b4c3103",
+      "name": "Cancel Invoice",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        448,
+        928
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2BelrVghqyBvkmNp",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_log (tenant_id, actor, action, entity, entity_id, details, created_at)\nVALUES (1, 'bizos-invoice-form', 'invoice_rejected', 'invoice', {{ $json.id }},\n  '{\"invoice_no\": \"{{ $json.invoice_no }}\"}'::jsonb,\n  NOW())",
+        "options": {}
+      },
+      "id": "d6765ef0-7bdb-4e63-9bc8-d61257b81c4b",
+      "name": "Audit Reject",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        672,
+        928
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2BelrVghqyBvkmNp",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Invoice Rejected</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);padding:32px;width:100%;max-width:440px;text-align:center}.icon{font-size:48px;margin-bottom:16px}.title{font-size:22px;font-weight:700;color:#ef4444;margin-bottom:8px}.sub{color:#555;font-size:14px;margin-bottom:20px}.detail{background:#fff0f0;border-radius:8px;padding:14px;margin-bottom:20px;font-size:14px;color:#b91c1c}.btn{display:inline-block;padding:10px 24px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px}.footer{margin-top:20px;font-size:12px;color:#aaa}</style></head><body><div class=\"card\"><div class=\"icon\">❌</div><div class=\"title\">Invoice Rejected</div><p class=\"sub\">Draft invoice को cancel कर दिया गया है।</p><div class=\"detail\">Invoice No: <strong>{{ $(\"Cancel Invoice\").item.json.invoice_no }}</strong><br>Status: Cancelled</div><a href=\"/webhook/bizos-invoice-form\" class=\"btn\">+ New Invoice बनाएं</a><div class=\"footer\">BizOS • Gupta Electricals</div></div></body></html>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "3391403a-7f57-4596-a2dc-0b30eabb0158",
+      "name": "Respond Reject Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## BizOS 06 — Sale Invoice Creation\n\n**4 webhook routes:**\n1. GET /webhook/bizos-invoice-form → Form HTML (customers from DB)\n2. POST /webhook/bizos-invoice-submit → Insert draft → Approval page\n3. POST /webhook/bizos-invoice-approve → Post to books + audit_log\n4. POST /webhook/bizos-invoice-reject → Cancel draft + audit_log\n\n**HTML files:** /home/node/.n8n/bizos06/\n**tenant_id = 1 (fixed)**",
+        "color": 3
+      },
+      "id": "d05a02ae-6a81-4995-ae0a-19741bc1ebdb",
+      "name": "Sticky Note 6616fd2f",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        496,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name FROM customers WHERE tenant_id = 1 ORDER BY name ASC",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        176,
+        -320
+      ],
+      "id": "cbd6d9cc-b2dc-45f5-aa83-4ac86e55a2c4",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "2BelrVghqyBvkmNp",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Form HTML — inline HTML\nconst formHtml = \"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n  <meta charset=\\\"UTF-8\\\">\\n  <meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\\\">\\n  <title>BizOS \\u2013 New Sale Invoice</title>\\n  <style>\\n    * { box-sizing: border-box; margin: 0; padding: 0; }\\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 24px 16px; }\\n    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); padding: 28px; width: 100%; max-width: 640px; }\\n    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }\\n    .logo-text { font-size: 20px; font-weight: 700; color: #1a1a2e; }\\n    .logo-sub { font-size: 13px; color: #666; margin-top: 2px; }\\n    h2 { font-size: 17px; color: #1a1a2e; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #eee; }\\n    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }\\n    label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 5px; margin-top: 14px; text-transform: uppercase; letter-spacing: 0.4px; }\\n    select, input[type=\\\"text\\\"], input[type=\\\"date\\\"], input[type=\\\"number\\\"] {\\n      width: 100%; padding: 9px 11px; border: 1.5px solid #e0e0e0; border-radius: 7px;\\n      font-size: 14px; color: #1a1a2e; background: #fafafa; transition: border-color 0.2s;\\n    }\\n    select:focus, input:focus { outline: none; border-color: #4f46e5; background: #fff; }\\n\\n    /* Line items table */\\n    .items-section { margin-top: 20px; }\\n    .items-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }\\n    .items-header h3 { font-size: 14px; font-weight: 700; color: #1a1a2e; }\\n    .add-row-btn { padding: 6px 14px; background: #f0f0ff; color: #4f46e5; border: 1px solid #c7d2fe; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }\\n    .add-row-btn:hover { background: #e0e7ff; }\\n    .items-table { width: 100%; border-collapse: collapse; font-size: 13px; }\\n    .items-table th { text-align: left; padding: 8px 6px; background: #f8f9ff; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid #eee; }\\n    .items-table td { padding: 6px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }\\n    .items-table input { padding: 7px 8px; border: 1px solid #e0e0e0; border-radius: 5px; background: #fafafa; font-size: 13px; }\\n    .items-table input:focus { outline: none; border-color: #4f46e5; background: #fff; }\\n    .items-table input[name=\\\"desc[]\\\"] { width: 100%; min-width: 120px; }\\n    .items-table input[name=\\\"qty[]\\\"] { width: 64px; text-align: right; }\\n    .items-table input[name=\\\"rate[]\\\"] { width: 84px; text-align: right; }\\n    .items-table .line-total { width: 84px; text-align: right; font-weight: 600; color: #1a1a2e; padding-right: 8px; }\\n    .del-btn { width: 28px; height: 28px; background: #fff0f0; border: 1px solid #fecaca; border-radius: 5px; color: #ef4444; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }\\n    .del-btn:hover { background: #fee2e2; }\\n\\n    /* Totals */\\n    .totals-box { margin-top: 16px; background: #f8f9ff; border-radius: 8px; padding: 14px 16px; }\\n    .total-row { display: flex; justify-content: space-between; font-size: 14px; padding: 4px 0; color: #555; }\\n    .total-row.grand { font-weight: 700; font-size: 16px; color: #1a1a2e; border-top: 1px solid #ddd; margin-top: 6px; padding-top: 8px; }\\n\\n    /* GST */\\n    .gst-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }\\n\\n    .btn-submit { width: 100%; margin-top: 24px; padding: 13px; background: #4f46e5; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }\\n    .btn-submit:hover { background: #4338ca; }\\n    .btn-submit:disabled { background: #a5b4fc; cursor: not-allowed; }\\n    .footer { margin-top: 16px; text-align: center; font-size: 12px; color: #aaa; }\\n  </style>\\n</head>\\n<body>\\n  <div class=\\\"card\\\">\\n    <div class=\\\"logo\\\">\\n      <span style=\\\"font-size:26px\\\">\\ud83d\\udcca</span>\\n      <div>\\n        <div class=\\\"logo-text\\\">BizOS</div>\\n        <div class=\\\"logo-sub\\\">Gupta Electricals</div>\\n      </div>\\n    </div>\\n    <h2>\\ud83e\\uddfe New Sale Invoice \\u092c\\u0928\\u093e\\u090f\\u0902</h2>\\n\\n    <form id=\\\"invForm\\\" action=\\\"/webhook/bizos-invoice-submit\\\" method=\\\"POST\\\">\\n\\n      <!-- Customer + Invoice No -->\\n      <div class=\\\"row2\\\">\\n        <div>\\n          <label for=\\\"customer_id\\\">Customer *</label>\\n          <select id=\\\"customer_id\\\" name=\\\"customer_id\\\" required>\\n            <option value=\\\"\\\">-- Customer \\u091a\\u0941\\u0928\\u0947\\u0902 --</option>\\n            __CUSTOMER_OPTIONS__\\n          </select>\\n        </div>\\n        <div>\\n          <label for=\\\"invoice_no\\\">Invoice No. *</label>\\n          <input type=\\\"text\\\" id=\\\"invoice_no\\\" name=\\\"invoice_no\\\" placeholder=\\\"\\u091c\\u0948\\u0938\\u0947: S-2001\\\" required>\\n        </div>\\n      </div>\\n\\n      <!-- Dates -->\\n      <div class=\\\"row2\\\">\\n        <div>\\n          <label for=\\\"invoice_date\\\">Invoice Date *</label>\\n          <input type=\\\"date\\\" id=\\\"invoice_date\\\" name=\\\"invoice_date\\\" required>\\n        </div>\\n        <div>\\n          <label for=\\\"due_date\\\">Due Date</label>\\n          <input type=\\\"date\\\" id=\\\"due_date\\\" name=\\\"due_date\\\">\\n        </div>\\n      </div>\\n\\n      <!-- Party GSTIN -->\\n      <label for=\\\"party_gstin\\\">Customer GSTIN (Optional)</label>\\n      <input type=\\\"text\\\" id=\\\"party_gstin\\\" name=\\\"party_gstin\\\" placeholder=\\\"15-character GSTIN\\\" maxlength=\\\"15\\\" style=\\\"text-transform:uppercase\\\">\\n\\n      <!-- Line items -->\\n      <div class=\\\"items-section\\\">\\n        <div class=\\\"items-header\\\">\\n          <h3>\\ud83d\\udce6 Line Items</h3>\\n          <button type=\\\"button\\\" class=\\\"add-row-btn\\\" onclick=\\\"addRow()\\\">+ Add Item</button>\\n        </div>\\n        <table class=\\\"items-table\\\">\\n          <thead>\\n            <tr>\\n              <th>Description</th>\\n              <th>Qty</th>\\n              <th>Rate (Rs)</th>\\n              <th>Amount</th>\\n              <th></th>\\n            </tr>\\n          </thead>\\n          <tbody id=\\\"itemsBody\\\">\\n            <!-- rows injected by JS -->\\n          </tbody>\\n        </table>\\n      </div>\\n\\n      <!-- GST rates -->\\n      <div class=\\\"gst-row\\\">\\n        <div>\\n          <label for=\\\"cgst_pct\\\">CGST %</label>\\n          <input type=\\\"number\\\" id=\\\"cgst_pct\\\" name=\\\"cgst_pct\\\" value=\\\"9\\\" min=\\\"0\\\" max=\\\"14\\\" step=\\\"0.5\\\" onchange=\\\"recalc()\\\">\\n        </div>\\n        <div>\\n          <label for=\\\"sgst_pct\\\">SGST %</label>\\n          <input type=\\\"number\\\" id=\\\"sgst_pct\\\" name=\\\"sgst_pct\\\" value=\\\"9\\\" min=\\\"0\\\" max=\\\"14\\\" step=\\\"0.5\\\" onchange=\\\"recalc()\\\">\\n        </div>\\n      </div>\\n\\n      <!-- Hidden totals submitted with form -->\\n      <input type=\\\"hidden\\\" id=\\\"h_taxable\\\" name=\\\"taxable_amount\\\" value=\\\"0\\\">\\n      <input type=\\\"hidden\\\" id=\\\"h_cgst\\\" name=\\\"cgst\\\" value=\\\"0\\\">\\n      <input type=\\\"hidden\\\" id=\\\"h_sgst\\\" name=\\\"sgst\\\" value=\\\"0\\\">\\n      <input type=\\\"hidden\\\" id=\\\"h_total\\\" name=\\\"total\\\" value=\\\"0\\\">\\n      <!-- Line items as JSON -->\\n      <input type=\\\"hidden\\\" id=\\\"h_items\\\" name=\\\"items_json\\\" value=\\\"[]\\\">\\n\\n      <!-- Totals display -->\\n      <div class=\\\"totals-box\\\" id=\\\"totalsBox\\\" style=\\\"display:none\\\">\\n        <div class=\\\"total-row\\\"><span>Taxable Amount</span><span id=\\\"d_taxable\\\">Rs 0</span></div>\\n        <div class=\\\"total-row\\\"><span>CGST</span><span id=\\\"d_cgst\\\">Rs 0</span></div>\\n        <div class=\\\"total-row\\\"><span>SGST</span><span id=\\\"d_sgst\\\">Rs 0</span></div>\\n        <div class=\\\"total-row grand\\\"><span>Total Invoice</span><span id=\\\"d_total\\\">Rs 0</span></div>\\n      </div>\\n\\n      <button type=\\\"submit\\\" class=\\\"btn-submit\\\" id=\\\"submitBtn\\\">\\ud83d\\udccb Draft \\u092c\\u0928\\u093e\\u090f\\u0902 (Owner Approval \\u0915\\u0947 \\u0932\\u093f\\u090f)</button>\\n    </form>\\n    <div class=\\\"footer\\\">BizOS \\u2022 Gupta Electricals \\u2022 Powered by n8n</div>\\n  </div>\\n\\n  <script>\\n    // Set today's date defaults\\n    const today = new Date().toISOString().split('T')[0];\\n    document.getElementById('invoice_date').value = today;\\n    const due = new Date(); due.setDate(due.getDate() + 15);\\n    document.getElementById('due_date').value = due.toISOString().split('T')[0];\\n\\n    function fmt(n) { return 'Rs ' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }\\n\\n    function addRow(desc='', qty='', rate='') {\\n      const tbody = document.getElementById('itemsBody');\\n      const idx = tbody.children.length;\\n      const tr = document.createElement('tr');\\n      tr.innerHTML = `\\n        <td><input type=\\\"text\\\" name=\\\"desc[]\\\" placeholder=\\\"Item description\\\" oninput=\\\"recalc()\\\" value=\\\"${desc}\\\"></td>\\n        <td><input type=\\\"number\\\" name=\\\"qty[]\\\" placeholder=\\\"1\\\" min=\\\"0.01\\\" step=\\\"0.01\\\" oninput=\\\"recalc()\\\" value=\\\"${qty}\\\"></td>\\n        <td><input type=\\\"number\\\" name=\\\"rate[]\\\" placeholder=\\\"0.00\\\" min=\\\"0\\\" step=\\\"0.01\\\" oninput=\\\"recalc()\\\" value=\\\"${rate}\\\"></td>\\n        <td class=\\\"line-total\\\" id=\\\"lt_${idx}\\\">Rs 0</td>\\n        <td><button type=\\\"button\\\" class=\\\"del-btn\\\" onclick=\\\"delRow(this)\\\">\\u00d7</button></td>`;\\n      tbody.appendChild(tr);\\n      recalc();\\n    }\\n\\n    function delRow(btn) {\\n      btn.closest('tr').remove();\\n      recalc();\\n    }\\n\\n    function recalc() {\\n      const qtyInputs = document.querySelectorAll('input[name=\\\"qty[]\\\"]');\\n      const rateInputs = document.querySelectorAll('input[name=\\\"rate[]\\\"]');\\n      const descInputs = document.querySelectorAll('input[name=\\\"desc[]\\\"]');\\n      const cgstPct = parseFloat(document.getElementById('cgst_pct').value) || 0;\\n      const sgstPct = parseFloat(document.getElementById('sgst_pct').value) || 0;\\n      let taxable = 0;\\n      const items = [];\\n      for (let i = 0; i < qtyInputs.length; i++) {\\n        const qty = parseFloat(qtyInputs[i].value) || 0;\\n        const rate = parseFloat(rateInputs[i].value) || 0;\\n        const line = Math.round(qty * rate * 100) / 100;\\n        const ltEl = document.getElementById('lt_' + i);\\n        if (ltEl) ltEl.textContent = fmt(line);\\n        taxable += line;\\n        items.push({ desc: descInputs[i].value, qty, rate, amount: line });\\n      }\\n      const cgst = Math.round(taxable * cgstPct) / 100;\\n      const sgst = Math.round(taxable * sgstPct) / 100;\\n      const total = taxable + cgst + sgst;\\n      document.getElementById('d_taxable').textContent = fmt(taxable);\\n      document.getElementById('d_cgst').textContent = fmt(cgst);\\n      document.getElementById('d_sgst').textContent = fmt(sgst);\\n      document.getElementById('d_total').textContent = fmt(total);\\n      document.getElementById('h_taxable').value = taxable.toFixed(2);\\n      document.getElementById('h_cgst').value = cgst.toFixed(2);\\n      document.getElementById('h_sgst').value = sgst.toFixed(2);\\n      document.getElementById('h_total').value = total.toFixed(2);\\n      document.getElementById('h_items').value = JSON.stringify(items);\\n      document.getElementById('totalsBox').style.display = taxable > 0 ? 'block' : 'none';\\n    }\\n\\n    document.getElementById('invForm').addEventListener('submit', function(e) {\\n      const items = JSON.parse(document.getElementById('h_items').value);\\n      if (items.length === 0 || items.every(it => it.amount === 0)) {\\n        e.preventDefault(); alert('\\u0915\\u092e \\u0938\\u0947 \\u0915\\u092e \\u090f\\u0915 line item add \\u0915\\u0930\\u0947\\u0902\\u0964'); return;\\n      }\\n      if (parseFloat(document.getElementById('h_total').value) <= 0) {\\n        e.preventDefault(); alert('Total amount 0 \\u0928\\u0939\\u0940\\u0902 \\u0939\\u094b \\u0938\\u0915\\u0924\\u093e\\u0964'); return;\\n      }\\n      document.getElementById('submitBtn').disabled = true;\\n      document.getElementById('submitBtn').textContent = 'Saving...';\\n    });\\n\\n    // Start with 2 empty rows\\n    addRow(); addRow();\\n  </script>\\n</body>\\n</html>\\n\";\n\nconst options = items.map(it => {\n  return '<option value=\"' + it.json.id + '\">' + it.json.name + '</option>';\n}).join('\\n');\n\nconst finalHtml = formHtml.replace('__CUSTOMER_OPTIONS__', options);\nreturn [{ json: { html: finalHtml } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -352
+      ],
+      "id": "31207f88-f2ff-4061-9dc2-9858d1ec95b5",
+      "name": "Build Form HTML"
+    }
+  ],
+  "pinData": {
+    "GET Invoice Form": [
+      {
+        "json": {
+          "headers": {
+            "host": "angel-cream-electron-squad.trycloudflare.com",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "accept-encoding": "gzip",
+            "accept-language": "en-US,en;q=0.9",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "2401:4900:8841:586c:35e3:f050:ff24:ac4a",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "IN",
+            "cf-ray": "a542f64ebb23baa7-DEL",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-warp-tag-id": "85973638-4107-470d-b9bd-8a87620d20ad",
+            "cf-worker": "trycloudflare.com",
+            "connection": "keep-alive",
+            "priority": "u=0, i",
+            "sec-ch-ua": "\"Google Chrome\";v=\"153\", \"Not_A Brand\";v=\"8\", \"Chromium\";v=\"153\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "sec-fetch-user": "?1",
+            "upgrade-insecure-requests": "1",
+            "x-forwarded-for": "2401:4900:8841:586c:35e3:f050:ff24:ac4a",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {},
+          "webhookUrl": "https://auto-dial-outdoors-alternate.trycloudflare.com/webhook/bizos-invoice-form",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "GET Invoice Form": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Invoice Submit": {
+      "main": [
+        [
+          {
+            "node": "Normalize Submit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Submit": {
+      "main": [
+        [
+          {
+            "node": "Insert Draft Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Draft Invoice": {
+      "main": [
+        [
+          {
+            "node": "Fetch Customer Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Customer Name": {
+      "main": [
+        [
+          {
+            "node": "Build Approval Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Approval Page": {
+      "main": [
+        [
+          {
+            "node": "Respond Approval Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Invoice Approve": {
+      "main": [
+        [
+          {
+            "node": "Normalize Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Approve": {
+      "main": [
+        [
+          {
+            "node": "Post Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Invoice": {
+      "main": [
+        [
+          {
+            "node": "Audit Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Approve": {
+      "main": [
+        [
+          {
+            "node": "Respond Approve Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Invoice Reject": {
+      "main": [
+        [
+          {
+            "node": "Normalize Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Reject": {
+      "main": [
+        [
+          {
+            "node": "Cancel Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Invoice": {
+      "main": [
+        [
+          {
+            "node": "Audit Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Reject": {
+      "main": [
+        [
+          {
+            "node": "Respond Reject Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Build Form HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Form HTML": {
+      "main": [
+        [
+          {
+            "node": "Respond Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "eb402d98-1f55-4062-a3ab-5edea6ef6bbd",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1a7061cf9b35931b75bbd76faf48846fd6a7e8914c8a0b2879def3a8afc71400"
+  },
+  "nodeGroups": [
+    {
+      "id": "b6562dd3-511e-4027-adbe-41ef05172483",
+      "name": "Route 1 – Serve Invoice Form",
+      "nodeIds": [
+        "4a2be22c-34dd-4fd9-bf5a-2348a6969cf0"
+      ],
+      "description": "GET /webhook/bizos-invoice-form → fetch customers from DB → inject into HTML → respond"
+    },
+    {
+      "id": "5043e14e-9e0e-4dae-81f2-a7552713ac93",
+      "name": "Route 2 – Draft Invoice + Approval",
+      "nodeIds": [
+        "ab58f6b1-8ab7-476c-926c-8cbce4c71639",
+        "b1afbb18-1cc4-4ec8-97a5-b1ed2d923eed",
+        "4e516513-bef7-4d51-8092-845c2d585d21",
+        "05689bc0-6ca9-4221-b274-874e82b2dc0b",
+        "687a07b9-b5dd-4a05-92dc-943f3cf22f21"
+      ],
+      "description": "POST submit → normalize → insert draft invoice → fetch customer name → build approval page → respond"
+    },
+    {
+      "id": "ea2de0b6-4291-4c8f-bfdc-bbea5e149dda",
+      "name": "Route 3 – Approve Invoice",
+      "nodeIds": [
+        "cf53a3af-c1a3-4440-9be2-d50c7892157a",
+        "5666a664-9982-4294-b4c9-00f983a74272",
+        "e3bcb834-d728-412b-9bfb-233ba4056da9",
+        "e0aacfba-a6fa-4c95-bc00-6d4df5ed0100"
+      ],
+      "description": "POST approve → normalize → UPDATE status=posted → audit_log → success page"
+    },
+    {
+      "id": "8404c928-c041-4419-b30e-9cdfc5096fb0",
+      "name": "Route 4 – Reject Invoice",
+      "nodeIds": [
+        "9bb019f4-eaf7-4b7e-9bd2-2141355a07d3",
+        "814e15b0-061d-4aa0-bfb5-87cc7b4c3103",
+        "d6765ef0-7bdb-4e63-9bc8-d61257b81c4b",
+        "3391403a-7f57-4596-a2dc-0b30eabb0158"
+      ],
+      "description": "POST reject → normalize → UPDATE status=cancelled → audit_log → rejection page"
+    }
+  ],
+  "id": "6MJuMgbh7wulqkzu",
+  "tags": []
+}
