@@ -1,0 +1,41 @@
+@"
+services:
+  - type: web
+    name: bizos-n8n
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      - key: N8N_BASIC_AUTH_ACTIVE
+        value: true
+      - key: N8N_BASIC_AUTH_USER
+        value: admin
+      - key: N8N_BASIC_AUTH_PASSWORD
+        generateValue: true
+      - key: N8N_HOST
+        fromService:
+          name: bizos-n8n
+          type: web
+          property: host
+      - key: WEBHOOK_URL
+        fromService:
+          name: bizos-n8n
+          type: web
+          property: url
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        value: ep-holy-lake-ao2jhnwq-pooler.c-2.ap-southeast-1.aws.neon.tech
+      - key: DB_POSTGRESDB_PORT
+        value: 5432
+      - key: DB_POSTGRESDB_DATABASE
+        value: neondb
+      - key: DB_POSTGRESDB_USER
+        value: neondb_owner
+      - key: DB_POSTGRESDB_PASSWORD
+        sync: false
+      - key: DB_POSTGRESDB_SSL_CA
+        value: ""
+      - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
+        value: false
+"@ | Out-File render.yaml -Encoding utf8
